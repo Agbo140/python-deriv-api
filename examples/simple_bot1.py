@@ -5,7 +5,7 @@ import os
 from deriv_api import DerivAPI
 from deriv_api import APIError
 
-app_id = 1089
+app_id = int(os.getenv('DERIV_APP_ID', '1089'))
 api_token = os.getenv('DERIV_TOKEN', '')
 
 if len(api_token) == 0:
@@ -47,29 +47,34 @@ async def sample_calls():
                                    })
     print(proposal)
 
-    # Buy
-    response = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 100})
-    print(response)
-    print(response.get('buy').get('buy_price'))
-    print(response.get('buy').get('contract_id'))
-    print(response.get('buy').get('longcode'))
-    await asyncio.sleep(1) # wait 1 second
-    print("after buy")
+    # Buy - with error handling for insufficient balance
+    try:
+        response = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 100})
+        print(response)
+        print(response.get('buy').get('buy_price'))
+        print(response.get('buy').get('contract_id'))
+        print(response.get('buy').get('longcode'))
+        await asyncio.sleep(1) # wait 1 second
+        print("after buy")
+    except APIError as err:
+        print(f"Buy error (this is expected with zero balance): {err}")
+        response = None
 
     # open contracts
-    poc = await api.proposal_open_contract(
-        {"proposal_open_contract": 1, "contract_id": response.get('buy').get('contract_id')})
-    print(poc)
-    print("waiting is sold........................")
-    if not poc.get('proposal_open_contract').get('is_sold'):
-        # sell
-        try:
-            await asyncio.sleep(1) # wainting for 1 second for entry tick
-            sell = await api.sell({"sell": response.get('buy').get('contract_id'), "price": 40})
-            print(sell)
-        except APIError as err:
-            print("error!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            print(err)
+    if response:
+        poc = await api.proposal_open_contract(
+            {"proposal_open_contract": 1, "contract_id": response.get('buy').get('contract_id')})
+        print(poc)
+        print("waiting is sold........................")
+        if not poc.get('proposal_open_contract').get('is_sold'):
+            # sell
+            try:
+                await asyncio.sleep(1) # wainting for 1 second for entry tick
+                sell = await api.sell({"sell": response.get('buy').get('contract_id'), "price": 40})
+                print(sell)
+            except APIError as err:
+                print("error!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                print(err)
 
     # profit table
     profit_table = await api.profit_table({"profit_table": 1, "description": 1, "sort": "ASC"})
